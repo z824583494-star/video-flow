@@ -72,7 +72,7 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.3.1")
     // FFmpeg 软件解码扩展：覆盖更多冷门格式（MKV/AVI/FLV/TS 里的奇葩编码、AC3/EAC3/DTS 等）
     // EXTENSION_RENDERER_MODE_ON 模式下，能硬解的格式仍走硬解，只有当设备 MediaCodec 不支持时才回退到 FFmpeg 软解
-    implementation("androidx.media3:media3-decoder-ffmpeg:1.3.1")
+   implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.3.1+2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
