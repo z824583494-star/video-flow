@@ -1,6 +1,5 @@
 name: 构建 APK
 
-# 触发条件：推送代码时自动构建，也可在 Actions 页面手动触发
 on:
   push:
     branches: [ main, master ]
@@ -21,6 +20,12 @@ jobs:
 
       - name: 安装 Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: 接受许可证并安装 SDK 组件
+        run: |
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: 安装 Gradle
         uses: gradle/actions/setup-gradle@v4
