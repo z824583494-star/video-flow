@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>视频速览 · 交互预览</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:#e9eaf0; display:flex; flex-direction:column; align-items:center;
+    min-height:100vh; padding:20px 10px; color:#222;
+  }
+  h1 { font-size:18px; margin-bottom:4px; color:#1a1a2e; }
+  .sub { font-size:12px; color:#888; margin-bottom:14px; text-align:center; }
+  .phone {
+    width:320px; height:640px; background:#000; border-radius:34px;
+    box-shadow:0 12px 40px rgba(0,0,0,.35); overflow:hidden; position:relative;
+    border:8px solid #111;
+  }
+  /* 顶部分类栏 */
+  .bar { position:absolute; top:0; left:0; right:0; z-index:20;
+    background:linear-gradient(#000000cc,#00000000); padding:12px 8px 18px; }
+  .row { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; }
+  .row::-webkit-scrollbar{ display:none; }
+  .chip { flex:0 0 auto; font-size:12px; color:#fff; background:#ffffff2e;
+    padding:6px 12px; border-radius:20px; white-space:nowrap; cursor:pointer; }
+  .chip.on { background:#FF3B5C; font-weight:700; }
+  .row2 { margin-top:8px; }
+  .hide { display:none; }
+  /* 视频区 */
+  .stage { position:absolute; inset:0; overflow:hidden; }
+  .card { position:absolute; inset:0; display:flex; flex-direction:column;
+    justify-content:center; align-items:center; color:#fff;
+    transition:transform .28s cubic-bezier(.22,.61,.36,1), opacity .28s; will-change:transform; }
+  .card .play { font-size:60px; opacity:.85; }
+  .card .info { position:absolute; left:14px; bottom:26px; right:14px;
+    background:#00000055; padding:12px 14px; border-radius:12px; }
+  .card .info .nm { font-size:15px; font-weight:600; }
+  .card .info .meta { font-size:12px; color:#eee; margin-top:5px; }
+  .card .info .tip { font-size:10px; color:#ffffffaa; margin-top:4px; }
+  .fav-badge { color:#FF3B5C; margin-right:5px; }
+  /* 滑动提示 */
+  .hint { position:absolute; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    background:#000000aa; padding:14px 12px; border-radius:50%; opacity:0;
+    transition:opacity .12s; z-index:15; font-size:12px; font-weight:700; }
+  .hint.l { left:16px; color:#FF3B5C; }
+  .hint.r { right:16px; color:#FFC107; }
+  .hint .ic { font-size:26px; }
+  .toast { position:absolute; bottom:90px; left:50%; transform:translateX(-50%);
+    background:#000000cc; color:#fff; font-size:13px; padding:8px 16px;
+    border-radius:20px; opacity:0; transition:opacity .2s; z-index:30; white-space:nowrap;}
+  .toast.show { opacity:1; }
+  .legend { margin-top:16px; font-size:12px; color:#555; line-height:1.9; max-width:320px; }
+  .legend b { color:#1a1a2e; }
+  .empty { position:absolute; inset:0; display:flex; align-items:center;
+    justify-content:center; color:#fff; font-size:14px; text-align:center; }
+</style>
+</head>
+<body>
+  <h1>视频速览 · 交互预览</h1>
+  <div class="sub">这是网页模拟版，用来体验手势与分类。<br>真机 App 会读取你手机里的真实视频。</div>
+
+  <div class="phone">
+    <div class="bar">
+      <div class="row" id="modeRow"></div>
+      <div class="row row2 hide" id="subRow"></div>
+    </div>
+    <div class="stage" id="stage"></div>
+    <div class="hint l" id="hintL"><span class="ic">🗑️</span>删除</div>
+    <div class="hint r" id="hintR"><span class="ic">⭐</span>收藏</div>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <div class="legend">
+    👆 上滑下一个　👇 下滑上一个<br>
+    👉 右滑<b style="color:#FF3B5C">删除</b>（真机会弹系统确认框）　👈 左滑<b style="color:#FFC107">收藏</b><br>
+    顶部可按 <b>时长 / 大小 / 收藏</b> 分类。
+  </div>
+
+<script>
+// 模拟视频数据
+let VIDEOS = [
+  {id:1, nm:"海边日落.mp4", dur:48,  size:8,   c:"linear-gradient(160deg,#ff9966,#ff5e62)"},
+  {id:2, nm:"旅行vlog_巴厘岛.mp4", dur:210, size:45, c:"linear-gradient(160deg,#36d1dc,#5b86e5)"},
+  {id:3, nm:"演唱会现场.mp4", dur:1240, size:320, c:"linear-gradient(160deg,#654ea3,#eaafc8)"},
+  {id:4, nm:"做饭教程_红烧肉.mp4", dur:620, size:130, c:"linear-gradient(160deg,#11998e,#38ef7d)"},
+  {id:5, nm:"猫咪搞笑合集.mp4", dur:35,  size:6,   c:"linear-gradient(160deg,#f7971e,#ffd200)"},
+  {id:6, nm:"篮球集锦.mp4", dur:180, size:70,  c:"linear-gradient(160deg,#2193b0,#6dd5ed)"},
+];
+let FAV = new Set();
+
+const MODES = ["全部","按时长","按大小","收藏"];
+const DUR = [["全部",null],["1分钟内",v=>v.dur<60],["1-5分钟",v=>v.dur>=60&&v.dur<300],["5-30分钟",v=>v.dur>=300&&v.dur<1800],["30分钟以上",v=>v.dur>=1800]];
+const SIZE= [["全部",null],["10MB内",v=>v.size<10],["10-50MB",v=>v.size>=10&&v.size<50],["50-200MB",v=>v.size>=50&&v.size<200],["200MB以上",v=>v.size>=200]];
+
+let mode="全部", durF=null, sizeF=null, idx=0;
+
+const stage=document.getElementById('stage');
+const modeRow=document.getElementById('modeRow');
+const subRow=document.getElementById('subRow');
+const hintL=document.getElementById('hintL'), hintR=document.getElementById('hintR');
+const toastEl=document.getElementById('toast');
+
+function fmtDur(s){const m=Math.floor(s/60),ss=s%60;return (m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;}
+function toast(t){toastEl.textContent=t;toastEl.classList.add('show');setTimeout(()=>toastEl.classList.remove('show'),1100);}
+
+function visible(){
+  if(mode==="全部") return VIDEOS;
+  if(mode==="收藏") return VIDEOS.filter(v=>FAV.has(v.id));
+  if(mode==="按时长"){const f=DUR.find(d=>d[0]===(durF||"全部"))[1];return f?VIDEOS.filter(f):VIDEOS;}
+  if(mode==="按大小"){const f=SIZE.find(d=>d[0]===(sizeF||"全部"))[1];return f?VIDEOS.filter(f):VIDEOS;}
+  return VIDEOS;
+}
+
+function renderBar(){
+  modeRow.innerHTML="";
+  MODES.forEach(m=>{
+    const c=document.createElement('div');c.className='chip'+(m===mode?' on':'');c.textContent=m;
+    c.onclick=()=>{mode=m;idx=0;renderBar();render();};
+    modeRow.appendChild(c);
+  });
+  if(mode==="按时长"||mode==="按大小"){
+    subRow.classList.remove('hide');subRow.innerHTML="";
+    const arr=mode==="按时长"?DUR:SIZE; const cur=mode==="按时长"?durF:sizeF;
+    arr.forEach(a=>{
+      const c=document.createElement('div');const label=a[0];
+      const active=(cur===label)||(!cur&&label==="全部");
+      c.className='chip'+(active?' on':'');c.textContent=label;
+      c.onclick=()=>{if(mode==="按时长")durF=label==="全部"?null:label;else sizeF=label==="全部"?null:label;idx=0;renderBar();render();};
+      subRow.appendChild(c);
+    });
+  } else subRow.classList.add('hide');
+}
+
+function render(){
+  stage.innerHTML="";
+  const list=visible();
+  if(list.length===0){const e=document.createElement('div');e.className='empty';e.innerHTML="这里没有视频<br>换个分类试试吧";stage.appendChild(e);return;}
+  if(idx>=list.length)idx=list.length-1;
+  const v=list[idx];
+  const card=document.createElement('div');card.className='card';card.style.background=v.c;
+  card.innerHTML=`<div class="play">▶</div>
+    <div class="info">
+      <div class="nm">${FAV.has(v.id)?'<span class="fav-badge">❤</span>':''}${v.nm}</div>
+      <div class="meta">时长 ${fmtDur(v.dur)}　·　大小 ${v.size} MB</div>
+      <div class="tip">右滑删除 · 左滑收藏 · 上滑下一个</div>
+    </div>`;
+  stage.appendChild(card);
+  bindGesture(card,list);
+}
+
+function bindGesture(card,list){
+  let sx=0,sy=0,dx=0,dy=0,drag=false,horiz=null;
+  const th=90;
+  const start=(x,y)=>{sx=x;sy=y;dx=0;dy=0;drag=true;horiz=null;card.style.transition='none';};
+  const move=(x,y)=>{
+    if(!drag)return;dx=x-sx;dy=y-sy;
+    if(horiz===null&&(Math.abs(dx)>8||Math.abs(dy)>8))horiz=Math.abs(dx)>Math.abs(dy);
+    if(horiz){
+      card.style.transform=`translateX(${dx}px) rotate(${dx*0.03}deg)`;
+      hintL.style.opacity=dx>30?1:0; hintR.style.opacity=dx<-30?1:0;
+    }else{
+      card.style.transform=`translateY(${dy}px)`;
+    }
+  };
+  const end=()=>{
+    if(!drag)return;drag=false;card.style.transition='';
+    hintL.style.opacity=0;hintR.style.opacity=0;
+    if(horiz){
+      if(dx>th){ // 右滑删除
+        card.style.transform=`translateX(400px) rotate(20deg)`;card.style.opacity=0;
+        const v=list[idx];
+        setTimeout(()=>{VIDEOS=VIDEOS.filter(x=>x.id!==v.id);FAV.delete(v.id);toast('已删除：'+v.nm);render();},260);
+      }else if(dx<-th){ // 左滑收藏
+        const v=list[idx];const now=!FAV.has(v.id);if(now)FAV.add(v.id);else FAV.delete(v.id);
+        toast(now?'已收藏 ⭐':'已取消收藏');card.style.transform='';render();
+      }else card.style.transform='';
+    }else{
+      if(dy<-th){idx=Math.min(idx+1,list.length-1);render();} // 上滑下一个
+      else if(dy>th){idx=Math.max(idx-1,0);render();}          // 下滑上一个
+      else card.style.transform='';
+    }
+  };
+  card.addEventListener('touchstart',e=>start(e.touches[0].clientX,e.touches[0].clientY));
+  card.addEventListener('touchmove',e=>{move(e.touches[0].clientX,e.touches[0].clientY);e.preventDefault();},{passive:false});
+  card.addEventListener('touchend',end);
+  card.addEventListener('mousedown',e=>start(e.clientX,e.clientY));
+  window.addEventListener('mousemove',e=>move(e.clientX,e.clientY));
+  window.addEventListener('mouseup',end);
+}
+
+renderBar();render();
+</script>
+</body>
+</html>
