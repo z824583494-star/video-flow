@@ -77,5 +77,5 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     // 核心库脱糖依赖
-    coreLibraryDesugaring("androidx.tools:desugar_jdk_libs:2.0.4")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
