@@ -29,6 +29,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -75,4 +76,6 @@ dependencies {
    implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.3.1+2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+    // 核心库脱糖依赖
+    coreLibraryDesugaring("androidx.tools:desugar_jdk_libs:2.0.4")
 }
